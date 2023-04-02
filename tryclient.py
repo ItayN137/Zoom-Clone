@@ -3,23 +3,36 @@ import threading
 import tkinter
 import tkinter as tk
 from io import BytesIO
+
+import cv2
 from PIL import ImageGrab, Image, ImageTk
 import io
 import time
 import customtkinter
 from pynput.mouse import Controller
-
 from Window import Window
+from abc import ABC, abstractmethod
+import vidstream
 
 
-class Client:
+class Client(ABC):
+
+    def __init__(self):
+        self.STREAM_ON = True
+        self.root = None
+        self.app_image = None
+        self.label = None
+        self.server_socket = None
+        self.window = None
+        self.func = None
+
+        self.host = socket.gethostname()
+        self.port = 12345
+        self.server_address = (self.host, self.port)
 
     def connect_udp_socket(self):
         # Open a socket
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-        # Connect to the server
-        # self.socket.bind(self.server_address)
 
     def send_message(self, data):
         """Gets encoded data to send"""
@@ -33,9 +46,10 @@ class Client:
         image_quality = 10
         cursor = Image.open("cursor.png").resize((28, 28))
         my_cursor = Controller()
+
         while True:
-            # Take a screenshot using ImageGrab
-            screenshot = ImageGrab.grab()
+            # Take a screenshot of the monitor or the camera
+            screenshot = self.get_frame()
             if previous_screenshot == screenshot:
                 continue
 
@@ -67,7 +81,6 @@ class Client:
             else:
                 image_quality -= 10
             previous_screenshot = screenshot
-
 
     def receive_screenshot(self):
         """Function to receive and display the screenshot"""
@@ -115,21 +128,41 @@ class Client:
         # Close the socket
         # self.socket.close()
 
-    def __init__(self):
-        self.STREAM_ON = True
-        self.root = None
-        self.app_image = None
-        self.label = None
-        self.server_socket = None
+    def get_frame(self):
+        pass
 
-        self.host = socket.gethostname()
-        self.port = 12345
-        self.server_address = (self.host, self.port)
+
+class ScreenShareClient(Client):
+
+    def __init__(self):
+        super(ScreenShareClient, self).__init__()
+
+    def get_frame(self):
+        return ImageGrab.grab()
+
+class CameraClient(Client):
+
+    def __init__(self, x_res=1280, y_res=720):
+        super(CameraClient, self).__init__()
+        self.x_res = x_res
+        self.y_res = y_res
+        self.camera = cv2.VideoCapture(0)
+
+    def configure(self):
+        self.camera.set(3, self.x_res)
+        self.camera.set(4, self.y_res)
+
+    def get_frame(self):
+        ret, frame = self.camera.read()
+        pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        return frame
+
+
 
 
 
 def main():
-    c = Client()
+    c = ScreenShareClient()
     c.start()
 
 
