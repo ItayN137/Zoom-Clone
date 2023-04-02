@@ -9,6 +9,8 @@ import time
 import customtkinter
 from pynput.mouse import Controller
 
+from Window import Window
+
 
 class Client:
 
@@ -70,35 +72,31 @@ class Client:
     def receive_screenshot(self):
         """Function to receive and display the screenshot"""
         previous_img = None
-        # Receive the screenshot from the server
+
         while True:
+            # Receive the screenshot from the server
             length, server_address = self.server_socket.recvfrom(65000)
             screenshot_bytes, server_address = self.server_socket.recvfrom(int(length.decode()))
+
             # Create a PhotoImage object from the received data
             screenshot = Image.open(BytesIO(screenshot_bytes))
             img = ImageTk.PhotoImage(screenshot)
+
             # Update the label with the new screenshot
             if not previous_img == img:
-                self.label.configure(image=img)
-                self.label.update()
+                self.window.update_label(self.label, img)
             previous_img = img
 
-
     def start(self):
+
+        # Create a window object
+        self.window = Window()
+
         # Create a Tkinter window to display the screenshot
-        self.root = tk.Tk()
-        self.root.geometry("1280x720")
-        self.root.title("Itay's Zoom Application")
+        self.root = self.window.create_tk_window()
 
-        # App photo
-        self.app_image = tkinter.PhotoImage(file="zoom.png")
-        self.root.iconphoto(False, self.app_image)
-
-        # Open a label
-        default_img = Image.open("black_screen.png")
-        self.label = tk.Label(self.root, image=ImageTk.PhotoImage(default_img))
-        self.label.pack()
-        self.label.update()
+        # Open a label from the window object
+        self.label = self.window.create_label()
 
         # Connect to udp server
         self.connect_udp_socket()
@@ -112,7 +110,7 @@ class Client:
         t2 = threading.Thread(target=self.receive_screenshot)
         t2.start()
 
-        self.root.mainloop()
+        self.window.mainloop()
 
         # Close the socket
         # self.socket.close()
