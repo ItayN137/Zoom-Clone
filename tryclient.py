@@ -5,6 +5,7 @@ import tkinter as tk
 from io import BytesIO
 
 import cv2
+import pyaudio
 from PIL import ImageGrab, Image, ImageTk
 import io
 import time
@@ -12,20 +13,13 @@ import customtkinter
 from pynput.mouse import Controller
 from Window import Window
 from abc import ABC, abstractmethod
+import concurrent.futures
 import vidstream
 
 
 class Client(ABC):
 
     def __init__(self):
-        self.STREAM_ON = True
-        self.root = None
-        self.app_image = None
-        self.label = None
-        self.server_socket = None
-        self.window = None
-        self.func = None
-
         self.host = socket.gethostname()
         self.port = 12345
         self.server_address = (self.host, self.port)
@@ -37,6 +31,19 @@ class Client(ABC):
     def send_message(self, data):
         """Gets encoded data to send"""
         self.server_socket.sendto(data, self.server_address)
+
+
+class StreamingClient(Client):
+
+    def __init__(self):
+        super().__init__()
+        self.STREAM_ON = True
+        self.root = None
+        self.app_image = None
+        self.label = None
+        self.server_socket = None
+        self.window = None
+        self.func = None
 
     def send_screenshot(self):
         """Function to send the screenshot"""
@@ -132,7 +139,7 @@ class Client(ABC):
         pass
 
 
-class ScreenShareClient(Client):
+class ScreenShareClient(StreamingClient):
 
     def __init__(self):
         super(ScreenShareClient, self).__init__()
@@ -140,7 +147,8 @@ class ScreenShareClient(Client):
     def get_frame(self):
         return ImageGrab.grab()
 
-class CameraClient(Client):
+
+class CameraClient(StreamingClient):
 
     def __init__(self, x_res=1280, y_res=720):
         super(CameraClient, self).__init__()
@@ -148,17 +156,93 @@ class CameraClient(Client):
         self.y_res = y_res
         self.camera = cv2.VideoCapture(0)
 
-    def configure(self):
-        self.camera.set(3, self.x_res)
-        self.camera.set(4, self.y_res)
-
     def get_frame(self):
         ret, frame = self.camera.read()
-        pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        return frame
+        pil_image = None
+        if ret:
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        return pil_image
 
 
+class AudioClient(Client):
 
+    def __init__(self):
+        super().__init__()
+        self.AUDIO_ON = True
+        self.server_socket = None
+        self.stream = None
+
+        # Private Parameters
+        self._chunk = 1024
+        self._format = pyaudio.paInt16
+        self._channels = 1
+        self._rate = 44100
+
+        # Pool Parameter (Prevent Too Many Open Threads)
+        self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
+
+        # Create a PyAudio object
+        self.audio = pyaudio.PyAudio()
+
+        # Create a PyAudio stream for playback
+        self.stream = pyaudio.PyAudio.open(format=self._format, channels=self._channels,
+                                           rate=self._rate, output=True)
+
+        self.host = socket.gethostname()
+        self.port = 12345
+        self.server_address = (self.host, self.port)
+
+    def play_audio(self, data):
+        # Play the audio data in chunks
+        while True:
+            self.stream.write(data)
+
+    def recv_data(self):
+        while True:
+            # Receive a chunk of audio data from a client
+            data, address = self.server_socket.recvfrom(4096)
+
+            # Submit the audio data to the thread pool for processing
+            self.pool.submit(self.play_audio, data)
+
+    def send_data(self):
+        # Loop forever and send audio data to the server
+        while True:
+            # Read a chunk of audio data from the microphone
+            data = self.get_audio_data()
+
+            # Send the audio data to the server
+            self.send_message(data)
+
+    def start(self):
+        t1 = threading.Thread(target=self.send_data).start()
+
+        time.sleep(1 / 3)
+
+        t2 = threading.Thread(target=self.recv_data).start()
+
+    def get_audio_data(self):
+        return self.stream.read(self._chunk)
+
+
+class MicrophoneAudioClient(AudioClient):
+
+    def __init__(self):
+        super(MicrophoneAudioClient, self).__init__()
+
+
+class ComputerAudioClient(AudioClient):
+
+    def __init__(self):
+        super(ComputerAudioClient, self).__init__()
+
+        # Create a PyAudio stream for playback of output
+        self.stream = self.audio.open(format=pyaudio.paInt16,
+                                      channels=self._chunk,
+                                      rate=self._rate,
+                                      input=True,
+                                      output_device_index=None)  # Use default audio output device
 
 
 def main():
