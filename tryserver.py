@@ -66,18 +66,21 @@ class AudioServer:
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.server_socket.bind(self.server_address)
 
-
-
     def handle_data(self):
         while True:
             # Receive a chunk of audio data from a client
-            data, address = self.server_socket.recvfrom(4096)
+            data, address = self.server_socket.recvfrom(65000)
 
             # Send the data back to Clients
             self.server_socket.sendto(data, address)
 
+    def start(self):
+        t = threading.Thread(target=self.handle_data)
+        t.start()
+
+
 def main():
-    s = StreamingServer()
+    s = AudioServer()
     s.open_udp_server()
     s.start()
 
