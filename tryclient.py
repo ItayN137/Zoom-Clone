@@ -1,7 +1,7 @@
 import socket
 import threading
 from io import BytesIO
-from cv2 import cv2
+import cv2
 import pyaudio
 from PIL import ImageGrab, Image, ImageTk
 import io
@@ -115,7 +115,7 @@ class StreamingClient(Client):
         t1 = threading.Thread(target=self.send_screenshot)
         t1.start()
 
-        time.sleep(1 / 3)
+        time.sleep(3)
 
         t2 = threading.Thread(target=self.receive_screenshot)
         t2.start()
@@ -151,10 +151,20 @@ class CameraClient(StreamingClient):
         self.__x_res = x_res
         self.__y_res = y_res
         self.__camera = cv2.VideoCapture(0)
+        self.__configure()
+
+    def __configure(self):
+        self.__camera.set(3, self.__x_res)
+        self.__camera.set(4, self.__y_res)
 
     def get_frame(self):
-        ret, frame = self.__camera.get_frame()
-        return frame
+        # Get the screenshot from webcam
+        ret, frame = self.__camera.read()
+
+        # Convert screenshot to PIL image
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        pil_image = Image.fromarray(rgb_frame)
+        return pil_image
 
 
 class AudioClient(Client):
