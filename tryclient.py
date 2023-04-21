@@ -283,10 +283,10 @@ class ComputerAudioClient(AudioClient):
 
 
 def main():
-    c = CameraClient()
-    c.start()
-    # c = ComputerAudioClient()
+    # c = CameraClient()
     # c.start()
+    c = MicrophoneAudioClient()
+    c.start()
 
 
 if __name__ == '__main__':
