@@ -100,8 +100,10 @@ class AudioServer:
         self.__channels = 1
         self.__rate = 44100
 
-        # Create a socket object
+        # None objects
         self.server_socket = None
+        self.__clients_addresses = []
+        self.__clients_amount = 0
 
         # Bind the socket to a specific host and port
         self.host = socket.gethostname()
@@ -110,6 +112,10 @@ class AudioServer:
 
         # Open to udp server
         self.open_udp_server()
+
+    def broadcast(self, data):
+        for client_address in self.__clients_addresses:
+            self.server_socket.sendto(data, client_address)
 
     def open_udp_server(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -120,8 +126,17 @@ class AudioServer:
             # Receive a chunk of audio data from a client
             data, address = self.server_socket.recvfrom(65000)
 
+            if self.__clients_amount >= 4:
+                self.server_socket.sendto(str(len("max capacity")).encode(), address)
+                self.server_socket.sendto("max capacity".encode(), address)
+                # keep the server going and closing only the 5th client
+
+            if address not in self.__clients_addresses:
+                self.__clients_amount += 1
+                self.__clients_addresses.append(address)
+
             # Send the data back to Clients
-            self.server_socket.sendto(data, address)
+            self.broadcast(data)
 
     def start(self):
         t = threading.Thread(target=self.handle_data)
@@ -129,7 +144,7 @@ class AudioServer:
 
 
 def main():
-    s = StreamingServer()
+    s = AudioServer()
     s.start()
 
 
