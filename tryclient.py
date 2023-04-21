@@ -56,7 +56,7 @@ class StreamingClient(Client):
                 continue
 
             # Resizing the photo
-            screenshot = screenshot.resize((1280, 720))
+            screenshot = screenshot.resize((640, 360))
 
             # Saving the photo to the digital storage
             screenshot.save(bio, "JPEG", quality=image_quality)
