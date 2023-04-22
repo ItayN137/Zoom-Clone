@@ -7,6 +7,9 @@ import sys
 import threading
 import time
 
+import tryclient
+from tryclient import *
+
 
 class ZoomClient:
 
@@ -19,8 +22,8 @@ class ZoomClient:
         self._PARTICIPANTS_OPEN = False
         self._SETTINGS = False
         self._KICK = kick_adminstartion
-        self._WIDTH = 800
-        self._HEIGHT = 600
+        self._WIDTH = 1280
+        self._HEIGHT = 920
         self.root = 0
         self.lower_frame = 0
         self.upper_frame = 0
@@ -66,6 +69,8 @@ class ZoomClient:
         self.settings_photo = customtkinter.CTkImage(light_image=Image.open("settings.png"),
                                                      dark_image=Image.open("settings.png"),
                                                      size=(20, 20))
+        self.audio_client = tryclient.MicrophoneAudioClient()
+        self.audio_client.start()
 
         self.handle_new_client()
 
@@ -135,14 +140,14 @@ class ZoomClient:
             self._IS_MUTED = False
             self.microphone_button.configure(image=self.unmuted_mic_image, text="Mute",
                                              font=("Ariel", 15, "bold"), width=10, height=10)
-            # close the connection
+            self.audio_client.start_mic()
 
         else:
             self._IS_MUTED = True
             self.microphone_button.configure(image=self.muted_mic_image,
                                              text="Unmute",
                                              font=("Ariel", 15, "bold"), width=10, height=10)
-            # open the connection
+            self.audio_client.stop_mic()
         return
 
     def handle_camera(self):
