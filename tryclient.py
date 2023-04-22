@@ -18,7 +18,7 @@ import vidstream
 class Client(ABC):
 
     def __init__(self):
-        self.host = "192.168.1.13"
+        self.host = socket.gethostname()
         self.port = 12345
         self.server_address = (self.host, self.port)
 
@@ -37,15 +37,19 @@ class StreamingClient(Client):
 
     def __init__(self):
         super().__init__()
-        self.STREAM_ON = True
+        self.__stream_on = True
         self.root = None
         self.app_image = None
         self.label = None
         self.server_socket = None
         self.window = None
         self.func = None
+
         self.cursor = Image.open("cursor.png").resize((28, 28))
         self.my_cursor = Controller()
+
+        # Connect to udp server
+        self.connect_udp_socket()
 
     def send_screenshot(self):
         """Function to send the screenshot"""
@@ -54,56 +58,58 @@ class StreamingClient(Client):
         bio = io.BytesIO()
         image_quality = 10
 
-        while self.__running:
-            # Take a screenshot of the monitor or the camera
-            screenshot = self.get_frame()
-            if previous_screenshot == screenshot:
-                continue
+        while True:
+            print(self.__stream_on)
+            if self.__stream_on:
+                # Take a screenshot of the monitor or the camera
+                screenshot = self.get_frame()
+                if previous_screenshot == screenshot:
+                    continue
 
-            # Resizing the photo
-            screenshot = screenshot.resize((640, 360))
+                # Resizing the photo
+                screenshot = screenshot.resize((640, 360))
 
-            # Saving the photo to the digital storage
-            screenshot.save(bio, "JPEG", quality=image_quality)
-            bio.seek(0)
+                # Saving the photo to the digital storage
+                screenshot.save(bio, "JPEG", quality=image_quality)
+                bio.seek(0)
 
-            # Getting the bytes of the photo
-            screenshot = bio.getvalue()
+                # Getting the bytes of the photo
+                screenshot = bio.getvalue()
 
-            # Restarting the storage
-            bio.truncate(0)
+                # Restarting the storage
+                bio.truncate(0)
 
-            length = len(screenshot)
-            if length < 65000:
-                # Sending the screenshot
-                self.send_message(screenshot)
-                if image_quality < 90 and length < 65000:
-                    image_quality += 5
-            else:
-                image_quality -= 10
-            previous_screenshot = screenshot
+                length = len(screenshot)
+                if length < 65000:
+                    # Sending the screenshot
+                    self.send_message(screenshot)
+                    if image_quality < 90 and length < 65000:
+                        image_quality += 5
+                else:
+                    image_quality -= 10
+                previous_screenshot = screenshot
 
     def receive_screenshot(self):
         """Function to receive and display the screenshot"""
         previous_img = None
 
-        while self.__running:
-            # Receive the screenshot from the server
-            screenshot_bytes, server_address = self.server_socket.recvfrom(65000)
+        while True:
+            try:
+                # Receive the screenshot from the server
+                screenshot_bytes, server_address = self.server_socket.recvfrom(65000)
 
-            # Create a PhotoImage object from the received data
-            screenshot = Image.open(BytesIO(screenshot_bytes))
-            img = ImageTk.PhotoImage(screenshot)
+                # Create a PhotoImage object from the received data
+                screenshot = Image.open(BytesIO(screenshot_bytes))
+                img = ImageTk.PhotoImage(screenshot)
 
-            # Update the label with the new screenshot
-            if not previous_img == img:
-                self.window.update_label(self.label, img)
-            previous_img = img
-
+                # Update the label with the new screenshot
+                if not previous_img == img:
+                    self.window.update_label(self.label, img)
+                previous_img = img
+            except:
+                continue
 
     def start(self):
-
-        self.__running = True
         # Create a window object
         self.window = Window()
 
@@ -113,23 +119,24 @@ class StreamingClient(Client):
         # Open a label from the window object
         self.label = self.window.create_label()
 
-        # Connect to udp server
-        self.connect_udp_socket()
-
         # Send screenshots to the server
-        self.t1 = threading.Thread(target=self.send_screenshot)
-        self.t1.start()
+        send_thread = threading.Thread(target=self.send_screenshot).start()
 
-        time.sleep(1)
+        time.sleep(1/3)
 
-        self.t2 = threading.Thread(target=self.receive_screenshot)
-        self.t2.start()
+        recv_thread = threading.Thread(target=self.receive_screenshot).start()
 
         self.root.protocol("WM_DELETE_WINDOW", self.confirm_close)
         self.window.mainloop()
-
-        # Close the socket
-        # self.socket.close()
+        
+    # def start_stream(self):
+    #     self.__stream_on = True
+    #     return
+    #
+    # def stop_stream(self):
+    #     self.send_message("Q".encode())
+    #     self.__stream_on = False
+    #     return
 
     def get_frame(self):
         pass
@@ -137,7 +144,7 @@ class StreamingClient(Client):
     def confirm_close(self):
         if askyesno(title='Exit', message='Close Window?'):
             self.send_message("Q".encode())
-            self.__running = False
+            self.__stream_on = False
             self.server_socket.close()
             self.window.destroy()
             sys.exit()
@@ -306,11 +313,11 @@ class ComputerAudioClient(AudioClient):
 
 
 def main():
-    # c = ScreenShareClient()
-    # c.start()
-    c = MicrophoneAudioClient()
+    c = ScreenShareClient()
     c.start()
-    c.start_mic()
+    # c = MicrophoneAudioClient()
+    # c.start()
+    # c.start_mic()
 
 
 if __name__ == '__main__':
