@@ -17,7 +17,7 @@ from tkinter.messagebox import askyesno
 class Client(ABC):
 
     def __init__(self):
-        self.host = "192.168.1.13"
+        self.host = socket.gethostname()
         self.port = 12345
         self.server_address = (self.host, self.port)
 
@@ -137,8 +137,6 @@ class StreamingClient(Client):
         if askyesno(title='Exit', message='Close Window?'):
             self.send_message("Q".encode())
             self.__running = False
-            self.t1.join()
-            self.t2.join()
             self.server_socket.close()
             self.window.destroy()
             sys.exit()
@@ -208,6 +206,10 @@ class AudioClient(Client):
 
         self.speaker = self.audio.open(format=self._format, channels=self._channels,
                                        rate=self._rate, output=True)
+
+        self.host = socket.gethostname()
+        self.port = 12345
+        self.server_address = (self.host, self.port)
 
     def recv_data(self):
         while True:
