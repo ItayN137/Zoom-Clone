@@ -1,4 +1,5 @@
 import socket
+import sys
 import threading
 from io import BytesIO
 import cv2
@@ -10,6 +11,7 @@ from pynput.mouse import Controller
 from Window import Window
 from abc import ABC
 import soundcard as sc
+from tkinter.messagebox import askyesno
 
 
 class Client(ABC):
@@ -56,7 +58,7 @@ class StreamingClient(Client):
                 continue
 
             # Resizing the photo
-            screenshot = screenshot.resize((1280, 720))
+            screenshot = screenshot.resize((640, 360))
 
             # Saving the photo to the digital storage
             screenshot.save(bio, "JPEG", quality=image_quality)
@@ -71,7 +73,6 @@ class StreamingClient(Client):
             length = len(screenshot)
             if length < 65000:
                 # Sending the screenshot
-                self.send_message(str(len(screenshot)).zfill(10).encode())
                 self.send_message(screenshot)
                 if image_quality < 90 and length < 65000:
                     image_quality += 5
@@ -85,8 +86,7 @@ class StreamingClient(Client):
 
         while True:
             # Receive the screenshot from the server
-            length, server_address = self.server_socket.recvfrom(65000)
-            screenshot_bytes, server_address = self.server_socket.recvfrom(int(length.decode()))
+            screenshot_bytes, server_address = self.server_socket.recvfrom(65000)
 
             # Create a PhotoImage object from the received data
             screenshot = Image.open(BytesIO(screenshot_bytes))
@@ -120,6 +120,7 @@ class StreamingClient(Client):
         t2 = threading.Thread(target=self.receive_screenshot)
         t2.start()
 
+        self.root.protocol("WM_DELETE_WINDOW", self.confirm_close)
         self.window.mainloop()
 
         # Close the socket
@@ -127,6 +128,14 @@ class StreamingClient(Client):
 
     def get_frame(self):
         pass
+
+    def confirm_close(self):
+        if askyesno(title='Exit', message='Close Window?'):
+            self.send_message("Q".encode())
+            self.window.destroy()
+            self.root.destroy()
+            self.server_socket.close()
+            sys.exit()
 
 
 class ScreenShareClient(StreamingClient):
@@ -283,9 +292,9 @@ class ComputerAudioClient(AudioClient):
 
 
 def main():
-    c = CameraClient()
+    c = ScreenShareClient()
     c.start()
-    # c = ComputerAudioClient()
+    # c = MicrophoneAudioClient()
     # c.start()
 
 
