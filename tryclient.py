@@ -21,6 +21,8 @@ class Client(ABC):
         self.port = 12345
         self.server_address = (self.host, self.port)
 
+        self.__running = False
+
     def connect_udp_socket(self):
         # Open a socket
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -51,7 +53,7 @@ class StreamingClient(Client):
         bio = io.BytesIO()
         image_quality = 10
 
-        while True:
+        while self.__running:
             # Take a screenshot of the monitor or the camera
             screenshot = self.get_frame()
             if previous_screenshot == screenshot:
@@ -84,7 +86,7 @@ class StreamingClient(Client):
         """Function to receive and display the screenshot"""
         previous_img = None
 
-        while True:
+        while self.__running:
             # Receive the screenshot from the server
             screenshot_bytes, server_address = self.server_socket.recvfrom(65000)
 
@@ -97,8 +99,10 @@ class StreamingClient(Client):
                 self.window.update_label(self.label, img)
             previous_img = img
 
+
     def start(self):
 
+        self.__running = True
         # Create a window object
         self.window = Window()
 
@@ -112,13 +116,13 @@ class StreamingClient(Client):
         self.connect_udp_socket()
 
         # Send screenshots to the server
-        t1 = threading.Thread(target=self.send_screenshot)
-        t1.start()
+        self.t1 = threading.Thread(target=self.send_screenshot)
+        self.t1.start()
 
-        time.sleep(3)
+        time.sleep(1)
 
-        t2 = threading.Thread(target=self.receive_screenshot)
-        t2.start()
+        self.t2 = threading.Thread(target=self.receive_screenshot)
+        self.t2.start()
 
         self.root.protocol("WM_DELETE_WINDOW", self.confirm_close)
         self.window.mainloop()
@@ -132,6 +136,7 @@ class StreamingClient(Client):
     def confirm_close(self):
         if askyesno(title='Exit', message='Close Window?'):
             self.send_message("Q".encode())
+            self.__running = False
             self.t1.join()
             self.t2.join()
             self.server_socket.close()
