@@ -71,7 +71,6 @@ class StreamingClient(Client):
             length = len(screenshot)
             if length < 65000:
                 # Sending the screenshot
-                self.send_message(str(len(screenshot)).zfill(10).encode())
                 self.send_message(screenshot)
                 if image_quality < 90 and length < 65000:
                     image_quality += 5
@@ -85,8 +84,7 @@ class StreamingClient(Client):
 
         while True:
             # Receive the screenshot from the server
-            length, server_address = self.server_socket.recvfrom(65000)
-            screenshot_bytes, server_address = self.server_socket.recvfrom(int(length.decode()))
+            screenshot_bytes, server_address = self.server_socket.recvfrom(65000)
 
             # Create a PhotoImage object from the received data
             screenshot = Image.open(BytesIO(screenshot_bytes))
@@ -283,10 +281,10 @@ class ComputerAudioClient(AudioClient):
 
 
 def main():
-    # c = CameraClient()
-    # c.start()
-    c = MicrophoneAudioClient()
+    c = ScreenShareClient()
     c.start()
+    # c = MicrophoneAudioClient()
+    # c.start()
 
 
 if __name__ == '__main__':
