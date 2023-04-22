@@ -72,6 +72,9 @@ class ZoomClient:
         self.audio_client = tryclient.MicrophoneAudioClient()
         self.audio_client.start()
 
+        self.screen_share_client = tryclient.ScreenShareClient()
+        self.screen_share_client.start()
+
         self.handle_new_client()
 
     def handle_new_client(self):
