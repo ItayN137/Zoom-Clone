@@ -152,7 +152,7 @@ class AudioServer:
 
 
 def main():
-    s = StreamingServer()
+    s = AudioServer()
     s.start()
 
 
