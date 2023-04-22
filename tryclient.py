@@ -12,6 +12,7 @@ from Window import Window
 from abc import ABC
 import soundcard as sc
 from tkinter.messagebox import askyesno
+import vidstream
 
 
 class Client(ABC):
@@ -187,6 +188,7 @@ class AudioClient(Client):
         self.AUDIO_ON = True
         self.server_socket = None
         self.stream = None
+        self.__muted = False
 
         # Private Parameters
         self._chunk = 1024
@@ -207,33 +209,41 @@ class AudioClient(Client):
         self.speaker = self.audio.open(format=self._format, channels=self._channels,
                                        rate=self._rate, output=True)
 
-        self.host = socket.gethostname()
-        self.port = 12345
-        self.server_address = (self.host, self.port)
-
     def recv_data(self):
         while True:
-            # Receive a chunk of audio data from a client
-            data, address = self.server_socket.recvfrom(65000)
+            try:
+                # Receive a chunk of audio data from a client
+                data, address = self.server_socket.recvfrom(65000)
 
-            # Play back audio data
-            self.speaker.write(data)
+                # Play back audio data
+                self.speaker.write(data)
+            except:
+                continue
 
     def send_data(self):
         # Loop forever and send audio data to the server
         while True:
-            # Read a chunk of audio data from the microphone
-            data = self.get_audio_data()
+            if not self.__muted:
+                # Read a chunk of audio data from the microphone
+                data = self.get_audio_data()
 
-            # Send the audio data to the server
-            self.send_message(data)
+                # Send the audio data to the server
+                self.send_message(data)
 
     def start(self):
-        t1 = threading.Thread(target=self.send_data).start()
+        send_thread = threading.Thread(target=self.send_data).start()
 
-        time.sleep(1 / 3)
+        time.sleep(1/3)
 
-        t2 = threading.Thread(target=self.recv_data).start()
+        recv_thread = threading.Thread(target=self.recv_data).start()
+
+    def start_mic(self):
+        self.__muted = False
+        return
+
+    def stop_mic(self):
+        self.__muted = True
+        return
 
     def get_audio_data(self):
         pass
@@ -296,10 +306,11 @@ class ComputerAudioClient(AudioClient):
 
 
 def main():
-    c = ScreenShareClient()
-    c.start()
-    # c = MicrophoneAudioClient()
+    # c = ScreenShareClient()
     # c.start()
+    c = MicrophoneAudioClient()
+    c.start()
+    c.start_mic()
 
 
 if __name__ == '__main__':
