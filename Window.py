@@ -22,11 +22,11 @@ class Window:
         self.root.iconphoto(False, app_image)
         return self.root
 
-    def create_label(self, img="black_screen.png", text="", font="", x=0, y=0):
+    def create_label(self, img="black_screen.png", text="", x=0, y=0):
         """creates label to display image using tk"""
         if type(img) == str:
             img = Image.open(img)
-        label = tk.Label(self.root, image=ImageTk.PhotoImage(img), text=text, font=font)
+        label = tk.Label(self.root, image=ImageTk.PhotoImage(img), text=text)
         label.pack(padx=x, pady=y)
         label.update()
         return label
