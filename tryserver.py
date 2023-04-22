@@ -52,7 +52,7 @@ class StreamingServer:
                 # Receive the data from the client
                 data, client_address = s.recvfrom(65000)
             except:
-                break
+                continue
 
             if self.__clients_amount >= 4:
                 self.server_socket.sendto(str(len("max capacity")).encode(), client_address)
@@ -152,7 +152,7 @@ class AudioServer:
 
 
 def main():
-    s = AudioServer()
+    s = StreamingServer()
     s.start()
 
 
