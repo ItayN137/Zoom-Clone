@@ -17,7 +17,7 @@ from tkinter.messagebox import askyesno
 class Client(ABC):
 
     def __init__(self):
-        self.host = socket.gethostname()
+        self.host = "192.168.1.13"
         self.port = 12345
         self.server_address = (self.host, self.port)
 
