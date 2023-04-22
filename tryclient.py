@@ -209,10 +209,6 @@ class AudioClient(Client):
         self.speaker = self.audio.open(format=self._format, channels=self._channels,
                                        rate=self._rate, output=True)
 
-        self.host = socket.gethostname()
-        self.port = 12345
-        self.server_address = (self.host, self.port)
-
     def recv_data(self):
         while True:
             # Receive a chunk of audio data from a client
