@@ -132,9 +132,10 @@ class StreamingClient(Client):
     def confirm_close(self):
         if askyesno(title='Exit', message='Close Window?'):
             self.send_message("Q".encode())
-            self.window.destroy()
-            self.root.destroy()
+            self.t1.join()
+            self.t2.join()
             self.server_socket.close()
+            self.window.destroy()
             sys.exit()
 
 
