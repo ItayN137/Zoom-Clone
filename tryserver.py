@@ -15,6 +15,8 @@ class StreamingServer:
         self.server_socket = None
         self.__clients_screenshots = {}
         self.__clients_amount = 0
+        self.big_screenshot = Image.new("RGB", (1280, 720), color='black')
+        self.reset_screenshot = Image.new("RGB", (640, 360), color='black')
 
         # Bind the socket to a specific host and port
         self.host = socket.gethostname()
@@ -29,11 +31,10 @@ class StreamingServer:
         self.server_socket.bind(self.server_address)
 
     def update_big_screenshot(self, client_address, screenshot):
-        big_screenshot = Image.new("RGB", (1280, 720), color='black')
         try:
-            big_screenshot.paste(screenshot, self.__clients_screenshots[client_address])
+            self.big_screenshot.paste(screenshot, self.__clients_screenshots[client_address])
         finally:
-            return big_screenshot
+            return self.big_screenshot
 
     def broadcast(self, data):
         for client_address in self.__clients_screenshots.keys():
@@ -48,8 +49,7 @@ class StreamingServer:
 
         while True:
             # Receive the data from the client
-            length, client_address = s.recvfrom(65000)
-            data, client_address = s.recvfrom(int(length.decode()))
+            data, client_address = s.recvfrom(65000)
 
             if self.__clients_amount >= 4:
                 self.server_socket.sendto(str(len("max capacity")).encode(), client_address)
@@ -79,7 +79,6 @@ class StreamingServer:
             length = len(new_screen)
             if length < 65000:
                 # Send back the screenshot
-                self.broadcast(str(length).zfill(10).encode())
                 self.broadcast(new_screen)
                 if image_quality < 90 and length < 65000:
                     image_quality += 5
@@ -144,7 +143,7 @@ class AudioServer:
 
 
 def main():
-    s = AudioServer()
+    s = StreamingServer()
     s.start()
 
 
