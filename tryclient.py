@@ -1,6 +1,9 @@
 import socket
+import sys
 import threading
 from io import BytesIO
+
+import customtkinter
 import cv2
 import pyaudio
 from PIL import ImageGrab, Image, ImageTk
@@ -10,6 +13,8 @@ from pynput.mouse import Controller
 from Window import Window
 from abc import ABC
 import soundcard as sc
+from tkinter.messagebox import askyesno
+import vidstream
 
 
 class Client(ABC):
@@ -18,6 +23,8 @@ class Client(ABC):
         self.host = socket.gethostname()
         self.port = 12345
         self.server_address = (self.host, self.port)
+
+        self.__running = False
 
     def connect_udp_socket(self):
         # Open a socket
@@ -32,15 +39,19 @@ class StreamingClient(Client):
 
     def __init__(self):
         super().__init__()
-        self.STREAM_ON = True
+        self.__stream_on = True
         self.root = None
         self.app_image = None
         self.label = None
         self.server_socket = None
         self.window = None
         self.func = None
+
         self.cursor = Image.open("cursor.png").resize((28, 28))
         self.my_cursor = Controller()
+
+        # Connect to udp server
+        self.connect_udp_socket()
 
     def send_screenshot(self):
         """Function to send the screenshot"""
@@ -50,83 +61,94 @@ class StreamingClient(Client):
         image_quality = 10
 
         while True:
-            # Take a screenshot of the monitor or the camera
-            screenshot = self.get_frame()
-            if previous_screenshot == screenshot:
-                continue
+            print(self.__stream_on)
+            if self.__stream_on:
+                # Take a screenshot of the monitor or the camera
+                screenshot = self.get_frame()
+                if previous_screenshot == screenshot:
+                    continue
 
-            # Resizing the photo
-            screenshot = screenshot.resize((1280, 720))
+                # Resizing the photo
+                screenshot = screenshot.resize((640, 360))
 
-            # Saving the photo to the digital storage
-            screenshot.save(bio, "JPEG", quality=image_quality)
-            bio.seek(0)
+                # Saving the photo to the digital storage
+                screenshot.save(bio, "JPEG", quality=image_quality)
+                bio.seek(0)
 
-            # Getting the bytes of the photo
-            screenshot = bio.getvalue()
+                # Getting the bytes of the photo
+                screenshot = bio.getvalue()
 
-            # Restarting the storage
-            bio.truncate(0)
+                # Restarting the storage
+                bio.truncate(0)
 
-            length = len(screenshot)
-            if length < 65000:
-                # Sending the screenshot
-                self.send_message(str(len(screenshot)).zfill(10).encode())
-                self.send_message(screenshot)
-                if image_quality < 90 and length < 65000:
-                    image_quality += 5
-            else:
-                image_quality -= 10
-            previous_screenshot = screenshot
+                length = len(screenshot)
+                if length < 65000:
+                    # Sending the screenshot
+                    self.send_message(screenshot)
+                    if image_quality < 90 and length < 65000:
+                        image_quality += 5
+                else:
+                    image_quality -= 10
+                previous_screenshot = screenshot
 
     def receive_screenshot(self):
         """Function to receive and display the screenshot"""
         previous_img = None
 
         while True:
-            # Receive the screenshot from the server
-            length, server_address = self.server_socket.recvfrom(65000)
-            screenshot_bytes, server_address = self.server_socket.recvfrom(int(length.decode()))
+            try:
+                # Receive the screenshot from the server
+                screenshot_bytes, server_address = self.server_socket.recvfrom(65000)
 
-            # Create a PhotoImage object from the received data
-            screenshot = Image.open(BytesIO(screenshot_bytes))
-            img = ImageTk.PhotoImage(screenshot)
+                # Create a PhotoImage object from the received data
+                screenshot = Image.open(BytesIO(screenshot_bytes))
+                img = ImageTk.PhotoImage(screenshot)
 
-            # Update the label with the new screenshot
-            if not previous_img == img:
-                self.window.update_label(self.label, img)
-            previous_img = img
+                # Update the label with the new screenshot
+                if not previous_img == img:
+                    self.window.update_label(self.label, img)
+                previous_img = img
+            except:
+                continue
 
-    def start(self):
+    def start(self, window, label):
+        # # Create a window object
+        # self.window = Window()
+        #
+        # # Create a Tkinter window to display the screenshot
+        # self.root = self.window.create_tk_window()
+        #
+        # # Open a label from the window object
+        # self.label = self.window.create_label()
 
-        # Create a window object
-        self.window = Window()
-
-        # Create a Tkinter window to display the screenshot
-        self.root = self.window.create_tk_window()
-
-        # Open a label from the window object
-        self.label = self.window.create_label()
-
-        # Connect to udp server
-        self.connect_udp_socket()
+        self.window = window
+        self.label = label
 
         # Send screenshots to the server
-        t1 = threading.Thread(target=self.send_screenshot)
-        t1.start()
+        send_thread = threading.Thread(target=self.send_screenshot).start()
 
-        time.sleep(3)
+        time.sleep(1 / 3)
 
-        t2 = threading.Thread(target=self.receive_screenshot)
-        t2.start()
+        recv_thread = threading.Thread(target=self.receive_screenshot).start()
 
-        self.window.mainloop()
+    def start_stream(self):
+        self.__stream_on = True
+        return
 
-        # Close the socket
-        # self.socket.close()
+    def stop_stream(self):
+        self.send_message("Q".encode())
+        self.__stream_on = False
+        return
 
     def get_frame(self):
         pass
+
+    def confirm_close(self):
+        self.send_message("Q".encode())
+        self.__stream_on = False
+        self.server_socket.close()
+        self.window.destroy()
+        sys.exit()
 
 
 class ScreenShareClient(StreamingClient):
@@ -174,6 +196,7 @@ class AudioClient(Client):
         self.AUDIO_ON = True
         self.server_socket = None
         self.stream = None
+        self.__muted = False
 
         # Private Parameters
         self._chunk = 1024
@@ -194,33 +217,41 @@ class AudioClient(Client):
         self.speaker = self.audio.open(format=self._format, channels=self._channels,
                                        rate=self._rate, output=True)
 
-        self.host = socket.gethostname()
-        self.port = 12345
-        self.server_address = (self.host, self.port)
-
     def recv_data(self):
         while True:
-            # Receive a chunk of audio data from a client
-            data, address = self.server_socket.recvfrom(65000)
+            try:
+                # Receive a chunk of audio data from a client
+                data, address = self.server_socket.recvfrom(65000)
 
-            # Play back audio data
-            self.speaker.write(data)
+                # Play back audio data
+                self.speaker.write(data)
+            except:
+                continue
 
     def send_data(self):
         # Loop forever and send audio data to the server
         while True:
-            # Read a chunk of audio data from the microphone
-            data = self.get_audio_data()
+            if not self.__muted:
+                # Read a chunk of audio data from the microphone
+                data = self.get_audio_data()
 
-            # Send the audio data to the server
-            self.send_message(data)
+                # Send the audio data to the server
+                self.send_message(data)
 
     def start(self):
-        t1 = threading.Thread(target=self.send_data).start()
+        send_thread = threading.Thread(target=self.send_data).start()
 
         time.sleep(1 / 3)
 
-        t2 = threading.Thread(target=self.recv_data).start()
+        recv_thread = threading.Thread(target=self.recv_data).start()
+
+    def start_mic(self):
+        self.__muted = False
+        return
+
+    def stop_mic(self):
+        self.__muted = True
+        return
 
     def get_audio_data(self):
         pass
@@ -283,10 +314,22 @@ class ComputerAudioClient(AudioClient):
 
 
 def main():
-    c = CameraClient()
-    c.start()
-    # c = ComputerAudioClient()
+    c = ScreenShareClient()
+
+    root = customtkinter.CTk()
+    window = Window(root)
+    root = window.create_tk_window()
+    top_level = window.create_top_level_window()
+    label = window.create_label(master=top_level)
+
+    label.after(0, c.start, window, label)
+
+    root.mainloop()
+
+    # c = MicrophoneAudioClient()
     # c.start()
+    # c.start_mic()
+
 
 
 if __name__ == '__main__':
