@@ -73,6 +73,14 @@ class ZoomClient:
                                                      dark_image=Image.open("settings.png"),
                                                      size=(20, 20))
 
+        self.screen_default_photo = customtkinter.CTkImage(light_image=Image.open("black_screen.png"),
+                                                     dark_image=Image.open("black_screen.png"),
+                                                     size=(1200, 600))
+
+        self.camera_default_photo = customtkinter.CTkImage(light_image=Image.open("black_screen.png"),
+                                                    dark_image=Image.open("black_screen.png"),
+                                                    size=(1200, 200))
+
         self.audio_client = tryclient.MicrophoneAudioClient()
 
         self.screen_share_client = tryclient.ScreenShareClient()
@@ -91,8 +99,11 @@ class ZoomClient:
                                             font=("Arial", 25))
         self.label.pack(pady=6, padx=5)
 
-        self.upper_frame = customtkinter.CTkLabel(master=self.root, text="", width=400, height=200)
-        self.upper_frame.pack(ipadx=400, ipady=220, side="top")
+        self.camera_display_label = customtkinter.CTkLabel(master=self.root, image=self.camera_default_photo, text="")
+        self.camera_display_label.place(relx=0.5, rely=0.16, anchor=tkinter.CENTER)
+
+        self.screen_display_label = customtkinter.CTkLabel(master=self.root, image=self.screen_default_photo, text="")
+        self.screen_display_label.place(relx=0.5, rely=0.6, anchor=tkinter.CENTER)
 
         self.lower_frame = customtkinter.CTkFrame(master=self.root, width=400, height=50)
         self.lower_frame.pack(ipadx=400, ipady=4, side="bottom")
@@ -135,7 +146,7 @@ class ZoomClient:
 
         threading.Thread(target=self.audio_client.start).start()
 
-        self.upper_frame.after(0, self.screen_share_client.start, self.upper_frame)
+        self.screen_display_label.after(0, self.screen_share_client.start, self.upper_frame)
 
 
         self.root.protocol("WM_DELETE_WINDOW", self.confirm_close)
