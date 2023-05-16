@@ -6,7 +6,7 @@ from io import BytesIO
 import customtkinter
 import cv2
 import pyaudio
-from PIL import ImageGrab, Image, ImageTk
+from PIL import ImageGrab, Image, ImageTk, JpegImagePlugin
 import io
 import time
 from pynput.mouse import Controller
@@ -106,22 +106,22 @@ class StreamingClient(Client):
 
                 # Update the label with the new screenshot
                 if not previous_img == img:
-                    self.window.update_label(self.label, img)
+                    self.update_label(self.label, img)
                 previous_img = img
             except:
                 continue
 
-    def start(self, window, label):
-        # # Create a window object
-        # self.window = Window()
-        #
-        # # Create a Tkinter window to display the screenshot
-        # self.root = self.window.create_tk_window()
-        #
-        # # Open a label from the window object
-        # self.label = self.window.create_label()
+    def update_label(self, label, img):
+        """updating label with given image"""
+        if type(img) == JpegImagePlugin.JpegImageFile:
+            img = ImageTk.PhotoImage(img)
 
-        self.window = window
+        label.configure(image=img)
+        label.update()
+        return
+
+    def start(self, label):
+        # Setting the label to update
         self.label = label
 
         # Send screenshots to the server
@@ -319,10 +319,9 @@ def main():
     root = customtkinter.CTk()
     window = Window(root)
     root = window.create_tk_window()
-    top_level = window.create_top_level_window()
-    label = window.create_label(master=top_level)
+    label = window.create_label(master=root)
 
-    label.after(0, c.start, window, label)
+    label.after(0, c.start, label)
 
     root.mainloop()
 
