@@ -146,7 +146,9 @@ class ZoomClient:
 
         #threading.Thread(target=self.audio_client.start).start()
 
-        self.camera_display_label.after(0, self.screen_share_client.start, self.camera_display_label)
+        #self.camera_display_label.after(0, self.camera_client.start, self.camera_display_label)
+
+        self.screen_display_label.after(0, self.screen_share_client.start, self.screen_display_label)
 
         self.root.protocol("WM_DELETE_WINDOW", self.confirm_close)
         self.root.mainloop()
