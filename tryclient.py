@@ -2,11 +2,11 @@ import socket
 import sys
 import threading
 from io import BytesIO
-
-import customtkinter
+import tkinter as tk
+import customtkinter as Ctk
 import cv2
 import pyaudio
-from PIL import ImageGrab, Image, ImageTk
+from PIL import ImageGrab, Image, ImageTk, JpegImagePlugin
 import io
 import time
 from pynput.mouse import Controller
@@ -14,7 +14,6 @@ from Window import Window
 from abc import ABC
 import soundcard as sc
 from tkinter.messagebox import askyesno
-import vidstream
 
 
 class Client(ABC):
@@ -39,7 +38,7 @@ class StreamingClient(Client):
 
     def __init__(self):
         super().__init__()
-        self.__stream_on = True
+        self.__stream_on = False
         self.root = None
         self.app_image = None
         self.label = None
@@ -67,9 +66,6 @@ class StreamingClient(Client):
                 screenshot = self.get_frame()
                 if previous_screenshot == screenshot:
                     continue
-
-                # Resizing the photo
-                screenshot = screenshot.resize((640, 360))
 
                 # Saving the photo to the digital storage
                 screenshot.save(bio, "JPEG", quality=image_quality)
@@ -106,22 +102,22 @@ class StreamingClient(Client):
 
                 # Update the label with the new screenshot
                 if not previous_img == img:
-                    self.window.update_label(self.label, img)
+                    self.update_label(self.label, img)
                 previous_img = img
             except:
                 continue
 
-    def start(self, window, label):
-        # # Create a window object
-        # self.window = Window()
-        #
-        # # Create a Tkinter window to display the screenshot
-        # self.root = self.window.create_tk_window()
-        #
-        # # Open a label from the window object
-        # self.label = self.window.create_label()
+    def update_label(self, label, img):
+        """updating label with given image"""
+        if type(img) == JpegImagePlugin.JpegImageFile:
+            img = ImageTk.PhotoImage(img)
 
-        self.window = window
+        label.configure(image=img)
+        label.update()
+        return
+
+    def start(self, label):
+        # Setting the label to update
         self.label = label
 
         # Send screenshots to the server
@@ -163,6 +159,10 @@ class ScreenShareClient(StreamingClient):
         frame = frame.convert("RGBA")
         frame.alpha_composite(self.cursor, dest=self.my_cursor.position)
         frame = frame.convert("RGB")
+
+        # Resizing the photo
+        frame = frame.resize((300, 200))
+
         return frame
 
 
@@ -186,6 +186,10 @@ class CameraClient(StreamingClient):
         # Convert screenshot to PIL image
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(rgb_frame)
+
+        # Resizing the photo
+        pil_image = pil_image.resize((300, 200))
+
         return pil_image
 
 
@@ -319,10 +323,9 @@ def main():
     root = customtkinter.CTk()
     window = Window(root)
     root = window.create_tk_window()
-    top_level = window.create_top_level_window()
-    label = window.create_label(master=top_level)
+    label = window.create_label(master=root)
 
-    label.after(0, c.start, window, label)
+    label.after(0, c.start, label)
 
     root.mainloop()
 
