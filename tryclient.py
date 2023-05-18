@@ -161,7 +161,7 @@ class ScreenShareClient(StreamingClient):
         frame = frame.convert("RGB")
 
         # Resizing the photo
-        frame = frame.resize((300, 200))
+        frame = frame.resize((1200, 600))
 
         return frame
 
