@@ -6,11 +6,16 @@ import socket
 import sys
 import threading
 import time
+import multiprocessing
+import tryclient
+import tryserver
+from tryclient import *
+from tryserver import *
 
 
 class ZoomClient:
 
-    def __init__(self, username, kick_adminstartion):
+    def __init__(self, username, ip_address):
         self._USERNAME = username
         self._IS_MUTED = True
         self._IS_CAMERA = False
@@ -18,20 +23,22 @@ class ZoomClient:
         self._CHAT_OPEN = False
         self._PARTICIPANTS_OPEN = False
         self._SETTINGS = False
-        self._KICK = kick_adminstartion
-        self._WIDTH = 800
-        self._HEIGHT = 600
-        self.root = 0
-        self.lower_frame = 0
-        self.upper_frame = 0
-        self.label = 0
-        self.app_image = 0
-        self.microphone_button = 0
-        self.camera_button = 0
-        self.share_screen_button = 0
-        self.chat_button = 0
-        self.participants_button = 0
-        self.settings_button = 0
+        self._WIDTH = 1280
+        self._HEIGHT = 920
+        self.root = None
+        self.lower_frame = None
+        self.upper_frame = None
+        self.label = None
+        self.top_level = None
+        self.app_image = None
+        self.microphone_button = None
+        self.camera_button = None
+        self.share_screen_button = None
+        self.chat_button = None
+        self.participants_button = None
+        self.settings_button = None
+        self.window = None
+        self.top_level_label = None
         self.muted_mic_image = customtkinter.CTkImage(light_image=Image.open("mute_microphone.png"),
                                                       dark_image=Image.open("mute_microphone.png"),
                                                       size=(20, 20))
@@ -67,7 +74,19 @@ class ZoomClient:
                                                      dark_image=Image.open("settings.png"),
                                                      size=(20, 20))
 
-        self.handle_new_client()
+        self.screen_default_photo = customtkinter.CTkImage(light_image=Image.open("black_screen.png"),
+                                                           dark_image=Image.open("black_screen.png"),
+                                                           size=(1200, 600))
+
+        self.camera_default_photo = customtkinter.CTkImage(light_image=Image.open("black_screen.png"),
+                                                           dark_image=Image.open("black_screen.png"),
+                                                           size=(1200, 200))
+
+        self.audio_client = tryclient.MicrophoneAudioClient(ip_address)
+        self.screen_share_client = tryclient.ScreenShareClient(ip_address)
+        self.camera_client = tryclient.CameraClient(ip_address)
+
+        threading.Thread(target=self.handle_new_client).start()
 
     def handle_new_client(self):
         self.root = customtkinter.CTk()
@@ -81,8 +100,11 @@ class ZoomClient:
                                             font=("Arial", 25))
         self.label.pack(pady=6, padx=5)
 
-        self.upper_frame = customtkinter.CTkFrame(master=self.root, width=400, height=50)
-        self.upper_frame.pack(ipadx=400, ipady=220, side="top")
+        self.camera_display_label = customtkinter.CTkLabel(master=self.root, image=self.camera_default_photo, text="")
+        self.camera_display_label.place(relx=0.5, rely=0.16, anchor=tkinter.CENTER)
+
+        self.screen_display_label = customtkinter.CTkLabel(master=self.root, image=self.screen_default_photo, text="")
+        self.screen_display_label.place(relx=0.5, rely=0.6, anchor=tkinter.CENTER)
 
         self.lower_frame = customtkinter.CTkFrame(master=self.root, width=400, height=50)
         self.lower_frame.pack(ipadx=400, ipady=4, side="bottom")
@@ -117,13 +139,24 @@ class ZoomClient:
                                                            command=self.handle_participants())
         self.participants_button.pack(pady=10, padx=10, side="right", anchor=tkinter.CENTER)
 
-        self.settings_button = customtkinter.CTkButton(master=self.lower_frame, image=self.settings_photo,
-                                                       text="",
-                                                       font=("Ariel", 15, "bold"), width=10, height=10,
-                                                       command=self.handle_settings())
-        self.settings_button.pack(pady=10, padx=10, side="right", anchor=tkinter.CENTER)
+        threading.Thread(target=self.audio_client.start).start()
 
+        self.camera_display_label.after(0, self.camera_client.start, self.camera_display_label)
+
+        self.screen_display_label.after(0, self.screen_share_client.start, self.screen_display_label)
+
+        self.root.protocol("WM_DELETE_WINDOW", self.confirm_close)
         self.root.mainloop()
+
+    def confirm_close(self):
+        if askyesno(title='Exit', message='Close Window?'):
+            self.screen_share_client.stop_stream()
+            self.screen_share_client.exit_window()
+            self.audio_client.stop_mic()
+            self.audio_client.exit_window()
+            self.camera_client.stop_stream()
+            self.camera_client.exit_window()
+            sys.exit()
 
     def handle_mic(self):
         """
@@ -135,14 +168,14 @@ class ZoomClient:
             self._IS_MUTED = False
             self.microphone_button.configure(image=self.unmuted_mic_image, text="Mute",
                                              font=("Ariel", 15, "bold"), width=10, height=10)
-            # close the connection
+            self.audio_client.start_mic()
 
         else:
             self._IS_MUTED = True
             self.microphone_button.configure(image=self.muted_mic_image,
                                              text="Unmute",
                                              font=("Ariel", 15, "bold"), width=10, height=10)
-            # open the connection
+            self.audio_client.stop_mic()
         return
 
     def handle_camera(self):
@@ -156,13 +189,15 @@ class ZoomClient:
             self.camera_button.configure(image=self.camera_on,
                                          text="Turn Off",
                                          font=("Ariel", 15, "bold"), width=10, height=10)
-            # open the connection
+            self.camera_client.start_stream()
+
         else:
             self._IS_CAMERA = False
             self.camera_button.configure(image=self.camera_off,
                                          text="Turn On",
                                          font=("Ariel", 15, "bold"), width=10, height=10)
-            # close the connection
+            self.camera_client.stop_stream()
+
         return
 
     def handle_share_screen(self):
@@ -176,13 +211,13 @@ class ZoomClient:
             self.share_screen_button.configure(image=self.share_screen_on_photo,
                                                text="Stop Sharing",
                                                font=("Ariel", 15, "bold"), width=10, height=10)
-            # open the connection
+            self.screen_share_client.start_stream()
         else:
             self._IS_SCREEN_SHARING = False
             self.share_screen_button.configure(image=self.share_screen_off_photo,
                                                text="Share Screen",
                                                font=("Ariel", 15, "bold"), width=10, height=10)
-            # close the connection
+            self.screen_share_client.stop_stream()
         return
 
     def handle_chat(self):
@@ -211,22 +246,18 @@ class ZoomClient:
             # close the participants window
         return
 
-    def handle_settings(self):
-        """
-        handle the press of the button. opening and closing the settings window
-        :return:
-        """
-        if not self._SETTINGS:
-            self._SETTINGS = True
-            # open the settings window
-        else:
-            self._SETTINGS = False
-            # close the settings window
-        return
+
+class HostZoomClient(ZoomClient):
+
+    def __init__(self, name, kick_adminstartion):
+        tryserver.AudioServer().start()
+        tryserver.ScreenStreamingServer().start()
+        tryserver.CameraStreamingServer().start()
+        super().__init__(name, kick_adminstartion)
 
 
 def main():
-    zoom_client = ZoomClient("Itay", False)
+    client = HostZoomClient("Itay", socket.gethostname())
 
 
 if __name__ == '__main__':

@@ -2,11 +2,13 @@ import socket
 import sys
 import threading
 from io import BytesIO
+import tkinter as tk
 
 import customtkinter
+import customtkinter as Ctk
 import cv2
 import pyaudio
-from PIL import ImageGrab, Image, ImageTk
+from PIL import ImageGrab, Image, ImageTk, JpegImagePlugin
 import io
 import time
 from pynput.mouse import Controller
@@ -14,15 +16,14 @@ from Window import Window
 from abc import ABC
 import soundcard as sc
 from tkinter.messagebox import askyesno
-import vidstream
 
 
 class Client(ABC):
 
-    def __init__(self):
-        self.host = socket.gethostname()
-        self.port = 12345
-        self.server_address = (self.host, self.port)
+    def __init__(self, ip_address):
+        self.host = ip_address
+        self.port = None
+        self.server_address = None
 
         self.__running = False
 
@@ -34,12 +35,15 @@ class Client(ABC):
         """Gets encoded data to send"""
         self.server_socket.sendto(data, self.server_address)
 
+    def exit_window(self):
+        sys.exit()
+
 
 class StreamingClient(Client):
 
-    def __init__(self):
-        super().__init__()
-        self.__stream_on = True
+    def __init__(self, ip_address):
+        super().__init__(ip_address)
+        self.__stream_on = False
         self.root = None
         self.app_image = None
         self.label = None
@@ -61,15 +65,12 @@ class StreamingClient(Client):
         image_quality = 10
 
         while True:
-            print(self.__stream_on)
+            print(f"Status: {self.__stream_on} on port: {self.port}")
             if self.__stream_on:
                 # Take a screenshot of the monitor or the camera
                 screenshot = self.get_frame()
                 if previous_screenshot == screenshot:
                     continue
-
-                # Resizing the photo
-                screenshot = screenshot.resize((640, 360))
 
                 # Saving the photo to the digital storage
                 screenshot.save(bio, "JPEG", quality=image_quality)
@@ -106,38 +107,38 @@ class StreamingClient(Client):
 
                 # Update the label with the new screenshot
                 if not previous_img == img:
-                    self.window.update_label(self.label, img)
+                    self.update_label(self.label, img)
                 previous_img = img
             except:
                 continue
 
-    def start(self, window, label):
-        # # Create a window object
-        # self.window = Window()
-        #
-        # # Create a Tkinter window to display the screenshot
-        # self.root = self.window.create_tk_window()
-        #
-        # # Open a label from the window object
-        # self.label = self.window.create_label()
+    def update_label(self, label, img):
+        """updating label with given image"""
+        if type(img) == JpegImagePlugin.JpegImageFile:
+            img = ImageTk.PhotoImage(img)
 
-        self.window = window
+        label.configure(image=img)
+        label.update()
+        return
+
+    def start(self, label):
+        # Setting the label to update
         self.label = label
 
         # Send screenshots to the server
-        send_thread = threading.Thread(target=self.send_screenshot).start()
+        threading.Thread(target=self.send_screenshot).start()
 
         time.sleep(1 / 3)
 
-        recv_thread = threading.Thread(target=self.receive_screenshot).start()
+        threading.Thread(target=self.receive_screenshot).start()
 
     def start_stream(self):
         self.__stream_on = True
         return
 
     def stop_stream(self):
-        self.send_message("Q".encode())
         self.__stream_on = False
+        self.send_message("Q".encode())
         return
 
     def get_frame(self):
@@ -153,8 +154,10 @@ class StreamingClient(Client):
 
 class ScreenShareClient(StreamingClient):
 
-    def __init__(self):
-        super(ScreenShareClient, self).__init__()
+    def __init__(self, ip_address):
+        super(ScreenShareClient, self).__init__(ip_address)
+        self.port = 12343
+        self.server_address = (self.host, self.port)
 
     def get_frame(self):
         frame = ImageGrab.grab()
@@ -163,13 +166,19 @@ class ScreenShareClient(StreamingClient):
         frame = frame.convert("RGBA")
         frame.alpha_composite(self.cursor, dest=self.my_cursor.position)
         frame = frame.convert("RGB")
+
+        # Resizing the photo
+        frame = frame.resize((1200, 600))
+
         return frame
 
 
 class CameraClient(StreamingClient):
 
-    def __init__(self, x_res=1280, y_res=720):
-        super(CameraClient, self).__init__()
+    def __init__(self, ip_address, x_res=1280, y_res=720):
+        super(CameraClient, self).__init__(ip_address)
+        self.port = 12344
+        self.server_address = (self.host, self.port)
         self.__x_res = x_res
         self.__y_res = y_res
         self.__camera = cv2.VideoCapture(0)
@@ -186,23 +195,29 @@ class CameraClient(StreamingClient):
         # Convert screenshot to PIL image
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(rgb_frame)
+
+        # Resizing the photo
+        pil_image = pil_image.resize((300, 200))
+
         return pil_image
 
 
 class AudioClient(Client):
 
-    def __init__(self):
-        super().__init__()
-        self.AUDIO_ON = True
+    def __init__(self, ip_address):
+        super().__init__(ip_address)
         self.server_socket = None
         self.stream = None
-        self.__muted = False
+        self.__muted = True
 
         # Private Parameters
         self._chunk = 1024
         self._format = pyaudio.paInt16
         self._channels = 1
         self._rate = 44100
+
+        self.port = 12345
+        self.server_address = (self.host, self.port)
 
         # Connect to udp server
         self.connect_udp_socket()
@@ -231,6 +246,7 @@ class AudioClient(Client):
     def send_data(self):
         # Loop forever and send audio data to the server
         while True:
+            print(f"Audio: {self.__muted}")
             if not self.__muted:
                 # Read a chunk of audio data from the microphone
                 data = self.get_audio_data()
@@ -239,11 +255,11 @@ class AudioClient(Client):
                 self.send_message(data)
 
     def start(self):
-        send_thread = threading.Thread(target=self.send_data).start()
+        threading.Thread(target=self.send_data).start()
 
         time.sleep(1 / 3)
 
-        recv_thread = threading.Thread(target=self.recv_data).start()
+        threading.Thread(target=self.recv_data).start()
 
     def start_mic(self):
         self.__muted = False
@@ -259,8 +275,8 @@ class AudioClient(Client):
 
 class MicrophoneAudioClient(AudioClient):
 
-    def __init__(self):
-        super(MicrophoneAudioClient, self).__init__()
+    def __init__(self, ip_address):
+        super(MicrophoneAudioClient, self).__init__(ip_address)
         self._rate = 16000
 
     def get_audio_data(self):
@@ -319,10 +335,9 @@ def main():
     root = customtkinter.CTk()
     window = Window(root)
     root = window.create_tk_window()
-    top_level = window.create_top_level_window()
-    label = window.create_label(master=top_level)
+    label = window.create_label(master=root)
 
-    label.after(0, c.start, window, label)
+    label.after(0, c.start, label)
 
     root.mainloop()
 

@@ -8,23 +8,23 @@ import pyaudio
 import concurrent.futures
 
 
-class StreamingServer:
+class CameraStreamingServer:
 
     def __init__(self):
         # Create a socket object
         self.server_socket = None
+        self.server_address = None
         self.__clients_screenshots = {}
         self.__clients_amount = 0
-        self.big_screenshot = Image.new("RGB", (1280, 720), color='black')
-        self.reset_screenshot = Image.new("RGB", (640, 360), color='black')
+        self.__max_clients = 4
+        self.big_screenshot = Image.new("RGB", (1200, 200), color='black')
+        self.reset_screenshot = Image.new("RGB", (300, 200), color='black')
+        self.cords = [(0, 0), (300, 0), (600, 0), (900, 0)]
 
         # Bind the socket to a specific host and port
         self.host = socket.gethostname()
-        self.port = 12345
+        self.port = 12344
         self.server_address = (self.host, self.port)
-
-        # Open to udp server
-        self.open_udp_server()
 
     def open_udp_server(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -45,7 +45,6 @@ class StreamingServer:
 
         bio = io.BytesIO()
         image_quality = 10
-        cords = [(0, 0), (640, 0), (0, 360), (640, 360)]
 
         while True:
             try:
@@ -54,26 +53,28 @@ class StreamingServer:
             except:
                 continue
 
-            if self.__clients_amount >= 4:
+            if self.__clients_amount >= self.__max_clients:
                 self.server_socket.sendto(str(len("max capacity")).encode(), client_address)
                 self.server_socket.sendto("max capacity".encode(), client_address)
                 # keep the server going and closing only the 5th client
 
             if client_address not in self.__clients_screenshots:
-                x_cords, y_cords = cords[self.__clients_amount]
+                x_cords, y_cords = self.cords[self.__clients_amount]
                 self.__clients_screenshots[client_address] = (x_cords, y_cords)
                 self.__clients_amount += 1
 
             if data == b'Q':
-                self.update_big_screenshot(client_address, self.reset_screenshot)
+                new_screen = self.update_big_screenshot(client_address, self.reset_screenshot)
+                print(self.__clients_screenshots[client_address])
                 del self.__clients_screenshots[client_address]
                 self.__clients_amount -= 1
-                continue
 
-            # Open the screenshot with BytesIO
-            screenshot = Image.open(BytesIO(data))
+            else:
+                # Open the screenshot with BytesIO
+                screenshot = Image.open(BytesIO(data))
 
-            new_screen = self.update_big_screenshot(client_address, screenshot)
+                # Updating the screen
+                new_screen = self.update_big_screenshot(client_address, screenshot)
 
             # Saving the photo to the digital storage
             new_screen.save(bio, "JPEG", quality=image_quality)
@@ -95,9 +96,23 @@ class StreamingServer:
                 image_quality -= 10
 
     def start(self):
+        # Open to udp server
+        self.open_udp_server()
         t = threading.Thread(target=self.handle_data, args=(self.server_socket,))
         t.start()
         return
+
+
+class ScreenStreamingServer(CameraStreamingServer):
+    
+    def __init__(self):
+        super(ScreenStreamingServer, self).__init__()
+        self.cords = [(0, 0)]
+        self.__max_clients = 1
+        self.big_screenshot = Image.new("RGB", (1200, 600), color='black')
+        self.reset_screenshot = Image.new("RGB", (1200, 600), color='black')
+        self.port = 12343
+        self.server_address = (self.host, self.port)
 
 
 class AudioServer:
@@ -153,10 +168,12 @@ class AudioServer:
 
 
 def main():
-    s = StreamingServer()
+    s = CameraStreamingServer()
     s.start()
-    # s1 = AudioServer()
-    # s1.start()
+    s1 = AudioServer()
+    s1.start()
+    s2 = ScreenStreamingServer()
+    s2.start()
 
 
 if __name__ == '__main__':
